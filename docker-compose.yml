@@ -1,0 +1,54 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: mini_siem
+      POSTGRES_USER: siem
+      POSTGRES_PASSWORD: siem
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U siem -d mini_siem"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - siem-network
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://siem:siem@db:5432/mini_siem
+      JWT_SECRET_KEY: change-me-for-local-dev
+      CORS_ORIGINS: '["http://localhost:5174","http://127.0.0.1:5174"]'
+      AUTO_CREATE_TABLES: "true"
+    ports:
+      - "8001:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - siem-network
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      VITE_API_URL: http://localhost:8001/api
+    ports:
+      - "5174:5173"
+    depends_on:
+      - backend
+    networks:
+      - siem-network
+
+networks:
+  siem-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+
